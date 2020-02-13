@@ -1,0 +1,75 @@
+stages:
+    - build
+    - publish
+
+.build_image: &build_image
+    stage: build
+    image: docker:latest
+    services:
+        - docker:dind
+    variables:
+        IMAGE: blaat
+        WORKDIR: docker
+        DOCKERFILE: Dockerfile
+        BUILD_ARGS: ""
+    script:
+        - docker login -u gitlab-ci-token -p "${CI_BUILD_TOKEN}" "${CI_REGISTRY}"
+        - echo "Building image '${IMAGE}'"
+        - cd ${WORKDIR}
+        - docker build --compress=true --force-rm=true --pull=true --no-cache=true --rm=true ${BUILD_ARGS} "--tag=${IMAGE}" "--file=${DOCKERFILE}" .
+        - docker push ${IMAGE}
+
+.docker:upload: &docker_upload    
+    stage: publish
+    image: docker:latest    
+    dependencies: []
+    services:     
+        - docker:dind    
+    variables:    
+        SOURCE_IMAGE: "???"    
+        TARGET_IMAGE: "???"    
+    script:    
+        - docker login -u gitlab-ci-token -p "${CI_BUILD_TOKEN}" "${CI_REGISTRY}"    
+        - docker pull "${SOURCE_IMAGE}"    
+        - docker tag "${SOURCE_IMAGE}" "${TARGET_IMAGE}"    
+        - export CI_REGISTRY_USER=bverhagen    
+        - export CI_REGISTRY_PASSWORD=${DOCKER_HUB_TOKEN}    
+        - rm -f ~/.docker/config.json    
+        - docker login -u bverhagen -p "${DOCKER_HUB_TOKEN}" docker.io    
+        - docker push "${TARGET_IMAGE}"
+
+build:yay:
+    <<: *build_image
+    variables:
+        IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:yay
+        WORKDIR: .
+        DOCKERFILE: Dockerfile
+        BUILD_ARGS: "--build-arg=WRAPPER=yay"
+
+build:pacaur:
+    <<: *build_image
+    variables:
+        IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:pacaur
+        WORKDIR: .
+        DOCKERFILE: Dockerfile
+        BUILD_ARGS: "--build-arg=WRAPPER=pacaur"
+
+publish:yay:
+    <<: *docker_upload
+    variables:
+        SOURCE_IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:yay
+        TARGET_IMAGE: bverhagen/awesome-aur-wrapper:yay
+    after_script:
+        # Upload it as the :latest target too
+        - docker tag "${SOURCE_IMAGE}" bverhagen/awesome-aur-wrapper:latest
+        - docker push bverhagen/awesome-aur-wrapper:latest
+    only:
+        - master
+
+publish:pacaur:
+    <<: *docker_upload
+    variables:
+        SOURCE_IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:pacaur
+        TARGET_IMAGE: bverhagen/awesome-aur-wrapper:pacaur
+    only:
+        - master

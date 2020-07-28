@@ -55,15 +55,22 @@ build:pacaur:
         DOCKERFILE: Dockerfile
         BUILD_ARGS: "--build-arg=WRAPPER=pacaur"
 
+publish:latest:
+    <<: *docker_upload
+    variables:
+        SOURCE_IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:yay
+        TARGET_IMAGE: bverhagen/awesome-aur-wrapper:latest
+    only:
+        - master
+    needs:
+        - job: build:yay
+          artifacts: false
+
 publish:yay:
     <<: *docker_upload
     variables:
         SOURCE_IMAGE: ${CI_REGISTRY_IMAGE}/${CI_COMMIT_REF_NAME}:yay
         TARGET_IMAGE: bverhagen/awesome-aur-wrapper:yay
-    after_script:
-        # Upload it as the :latest target too
-        - docker tag "${SOURCE_IMAGE}" bverhagen/awesome-aur-wrapper:latest
-        - docker push bverhagen/awesome-aur-wrapper:latest
     only:
         - master
     needs:
